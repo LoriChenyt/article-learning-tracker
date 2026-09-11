@@ -53,6 +53,25 @@ class Article:
     url: str
 
 
+@dataclass(frozen=True)
+class ClassificationRule:
+    category: str
+    difficulty: str
+    priority: str
+    keywords: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ClassificationConfig:
+    rules: tuple[ClassificationRule, ...]
+    default_category: str = "未分类"
+    default_difficulty: str = "待判断"
+    default_priority: str = "中"
+
+
+DEFAULT_CLASSIFICATION = ClassificationConfig(rules=())
+
+
 def sanitize_url(raw_url: str) -> str:
     """Remove common authentication parameters while preserving public links."""
     try:
@@ -169,26 +188,62 @@ def extract_from_har(path: Path) -> list[Article]:
     return articles
 
 
-def classify(title: str) -> tuple[str, str, str]:
+def load_classification_config(path: Path) -> ClassificationConfig:
+    """Load user-defined keyword rules from a UTF-8 JSON file."""
+    with path.open("r", encoding="utf-8-sig") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, dict):
+        raise ValueError("分类配置的最外层必须是 JSON 对象")
+
+    default = payload.get("default", {})
+    if not isinstance(default, dict):
+        raise ValueError("default 必须是 JSON 对象")
+
+    def required_text(value: Any, label: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{label} 必须是非空文本")
+        return value.strip()
+
+    rules_payload = payload.get("rules", [])
+    if not isinstance(rules_payload, list):
+        raise ValueError("rules 必须是 JSON 数组")
+
+    rules: list[ClassificationRule] = []
+    for index, item in enumerate(rules_payload, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"第 {index} 条规则必须是 JSON 对象")
+        keywords = item.get("keywords")
+        if not isinstance(keywords, list) or not keywords:
+            raise ValueError(f"第 {index} 条规则的 keywords 必须是非空数组")
+        clean_keywords = tuple(
+            required_text(keyword, f"第 {index} 条规则的关键词")
+            for keyword in keywords
+        )
+        rules.append(
+            ClassificationRule(
+                category=required_text(item.get("category"), f"第 {index} 条规则的 category"),
+                difficulty=required_text(item.get("difficulty"), f"第 {index} 条规则的 difficulty"),
+                priority=required_text(item.get("priority"), f"第 {index} 条规则的 priority"),
+                keywords=clean_keywords,
+            )
+        )
+
+    return ClassificationConfig(
+        rules=tuple(rules),
+        default_category=required_text(default.get("category", "未分类"), "default.category"),
+        default_difficulty=required_text(default.get("difficulty", "待判断"), "default.difficulty"),
+        default_priority=required_text(default.get("priority", "中"), "default.priority"),
+    )
+
+
+def classify(
+    title: str, config: ClassificationConfig = DEFAULT_CLASSIFICATION
+) -> tuple[str, str, str]:
     text = title.lower()
-    rules = [
-        ("时间序列", "进阶", "中", ["时间序列", "时序", "arima", "prophet"]),
-        ("NLP与大模型", "进阶", "中", ["nlp", "自然语言", "大模型", "llm", "gpt", "bert"]),
-        ("深度学习", "进阶", "中", ["深度学习", "神经网络", "cnn", "rnn", "lstm", "transformer", "pytorch"]),
-        ("NumPy", "入门", "高", ["numpy", "ndarray"]),
-        ("Pandas", "入门", "高", ["pandas", "dataframe", "groupby"]),
-        ("SQL与数据库", "入门", "高", ["sql", "mysql", "数据库"]),
-        ("数据可视化", "入门", "高", ["matplotlib", "seaborn", "可视化", "绘图", "图表"]),
-        ("数据清洗与特征工程", "中级", "高", ["数据清洗", "缺失值", "异常值", "特征工程", "特征选择", "pca"]),
-        ("数据分析与统计", "中级", "高", ["数据分析", "统计", "概率", "假设检验", "相关性"]),
-        ("传统机器学习", "中级", "中", ["机器学习", "xgboost", "随机森林", "决策树", "聚类", "回归", "分类", "sklearn"]),
-        ("Python基础", "入门", "高", ["python", "列表", "字典", "元组", "字符串", "装饰器", "迭代器"]),
-        ("工具与自动化", "入门", "低", ["爬虫", "自动化", "excel", "git", "jupyter"]),
-    ]
-    for category, difficulty, priority, keywords in rules:
-        if any(keyword in text for keyword in keywords):
-            return category, difficulty, priority
-    return "综合案例与其他", "中级", "低"
+    for rule in config.rules:
+        if any(keyword.lower() in text for keyword in rule.keywords):
+            return rule.category, rule.difficulty, rule.priority
+    return config.default_category, config.default_difficulty, config.default_priority
 
 
 def deduplicate(articles: Iterable[Article]) -> list[Article]:
@@ -198,34 +253,29 @@ def deduplicate(articles: Iterable[Article]) -> list[Article]:
     return list(unique.values())
 
 
-def learning_sort_key(article: Article) -> tuple[int, str, int]:
-    category, _, _ = classify(article.title)
+def learning_sort_key(
+    article: Article, config: ClassificationConfig = DEFAULT_CLASSIFICATION
+) -> tuple[int, str, int]:
+    category, _, _ = classify(article.title, config)
     category_order = {
-        "Python基础": 1,
-        "NumPy": 2,
-        "Pandas": 3,
-        "数据清洗与特征工程": 4,
-        "数据可视化": 5,
-        "SQL与数据库": 6,
-        "数据分析与统计": 7,
-        "传统机器学习": 8,
-        "时间序列": 9,
-        "深度学习": 10,
-        "NLP与大模型": 11,
-        "工具与自动化": 12,
-        "综合案例与其他": 13,
+        rule.category: index for index, rule in enumerate(config.rules, start=1)
     }
-    return (category_order[category], article.published_date, article.source_order or 10**9)
+    default_order = len(category_order) + 1
+    return (category_order.get(category, default_order), article.published_date, article.source_order or 10**9)
 
 
-def write_csv(articles: list[Article], output_path: Path) -> None:
+def write_csv(
+    articles: list[Article],
+    output_path: Path,
+    config: ClassificationConfig = DEFAULT_CLASSIFICATION,
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    ordered = sorted(articles, key=learning_sort_key)
+    ordered = sorted(articles, key=lambda article: learning_sort_key(article, config))
     with output_path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=COLUMNS)
         writer.writeheader()
         for learning_order, article in enumerate(ordered, start=1):
-            category, difficulty, priority = classify(article.title)
+            category, difficulty, priority = classify(article.title, config)
             writer.writerow(
                 {
                     "学习状态": "未学习",
@@ -267,6 +317,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--input", nargs="+", type=Path, required=True, help="一个或多个 HAR 文件")
     parser.add_argument("--output", type=Path, required=True, help="输出 CSV 路径")
+    parser.add_argument(
+        "--rules",
+        type=Path,
+        help="可选的 JSON 分类规则；不提供时所有文章标记为未分类",
+    )
     return parser
 
 
@@ -277,11 +332,21 @@ def main() -> int:
         print(f"找不到输入文件：{', '.join(missing_files)}", file=sys.stderr)
         return 2
 
+    try:
+        config = (
+            load_classification_config(args.rules)
+            if args.rules is not None
+            else DEFAULT_CLASSIFICATION
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        print(f"分类配置无效：{error}", file=sys.stderr)
+        return 2
+
     extracted: list[Article] = []
     for path in args.input:
         extracted.extend(extract_from_har(path))
     articles = deduplicate(extracted)
-    write_csv(articles, args.output)
+    write_csv(articles, args.output, config)
     print(summarize(articles))
     print(f"学习清单已保存到：{args.output}")
     return 0
@@ -289,4 +354,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
