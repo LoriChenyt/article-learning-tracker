@@ -2,16 +2,16 @@
 
 ## Sensitive files
 
-HAR files frequently contain authentication material. Never attach a HAR to a
-public issue, pull request, release, or repository commit.
+HAR files frequently contain authentication material. HAR files are therefore
+excluded from public issues, pull requests, releases, and repository commits.
 
-Before publishing generated data, verify that it contains only the intended
-article metadata. This project removes a conservative list of common session
+Generated data should be verified to contain only the intended article
+metadata before publication. This project removes a conservative list of common session
 parameters, but no automated filter can guarantee that every site uses the
 same parameter names.
 
 ## Reporting a problem
 
-If you find a case where sensitive data reaches the generated CSV, do not post
-the affected file publicly. Describe the field name and a synthetic example in
-a private security report.
+When sensitive data reaches a generated CSV, the affected file should remain
+private. A private security report can describe the field name and provide a
+synthetic example.
