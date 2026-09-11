@@ -1,0 +1,20 @@
+# Sensitive browser exports
+*.har
+
+# Private/local data and generated outputs
+private/
+data/
+output/
+*.xlsx
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
