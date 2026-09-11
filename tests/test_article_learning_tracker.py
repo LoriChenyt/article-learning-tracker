@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import unittest
+from csv import DictReader
 from pathlib import Path
 
 
@@ -58,6 +59,59 @@ class ArticleLearningTrackerTests(unittest.TestCase):
             path = Path(directory) / "fixture.json"
             path.write_text(json.dumps(har), encoding="utf-8")
             self.assertEqual(MODULE.extract_from_har(path), [])
+
+    def test_user_defined_rules_control_classification(self) -> None:
+        payload = {
+            "default": {"category": "其他", "difficulty": "待判断", "priority": "低"},
+            "rules": [
+                {
+                    "category": "英语学习",
+                    "difficulty": "入门",
+                    "priority": "高",
+                    "keywords": ["英语", "vocabulary"],
+                },
+                {
+                    "category": "科研方法",
+                    "difficulty": "进阶",
+                    "priority": "中",
+                    "keywords": ["论文"],
+                },
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rules.json"
+            path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            config = MODULE.load_classification_config(path)
+
+        self.assertEqual(MODULE.classify("英语词汇复习", config), ("英语学习", "入门", "高"))
+        self.assertEqual(MODULE.classify("旅行随笔", config), ("其他", "待判断", "低"))
+
+    def test_write_csv_uses_custom_rules(self) -> None:
+        config = MODULE.ClassificationConfig(
+            rules=(
+                MODULE.ClassificationRule("读书", "入门", "高", ("书单",)),
+            ),
+            default_category="其他",
+            default_difficulty="待判断",
+            default_priority="低",
+        )
+        article = MODULE.Article("id", 1, "年度书单", "2026-01-01", "https://example.com/a")
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "articles.csv"
+            MODULE.write_csv([article], output, config)
+            with output.open("r", encoding="utf-8-sig", newline="") as handle:
+                row = next(DictReader(handle))
+
+        self.assertEqual(row["建议分类"], "读书")
+        self.assertEqual(row["难度"], "入门")
+        self.assertEqual(row["优先级"], "高")
+
+    def test_invalid_rules_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rules.json"
+            path.write_text('{"rules": [{"category": "读书", "keywords": []}]}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "keywords"):
+                MODULE.load_classification_config(path)
 
 
 if __name__ == "__main__":
