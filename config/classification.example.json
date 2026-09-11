@@ -1,0 +1,39 @@
+{
+  "default": {
+    "category": "其他",
+    "difficulty": "待判断",
+    "priority": "中"
+  },
+  "rules": [
+    {
+      "category": "阅读方法",
+      "difficulty": "入门",
+      "priority": "高",
+      "keywords": ["阅读", "读书", "书单", "笔记"]
+    },
+    {
+      "category": "英语学习",
+      "difficulty": "入门",
+      "priority": "高",
+      "keywords": ["英语", "词汇", "语法", "听力", "口语"]
+    },
+    {
+      "category": "考试学习",
+      "difficulty": "中级",
+      "priority": "高",
+      "keywords": ["考公", "申论", "行测", "考试", "真题"]
+    },
+    {
+      "category": "科研方法",
+      "difficulty": "进阶",
+      "priority": "中",
+      "keywords": ["科研", "论文", "实验", "文献", "统计"]
+    },
+    {
+      "category": "财经知识",
+      "difficulty": "中级",
+      "priority": "中",
+      "keywords": ["财经", "投资", "基金", "股票", "宏观经济"]
+    }
+  ]
+}
