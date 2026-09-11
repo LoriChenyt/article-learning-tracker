@@ -12,11 +12,12 @@
 - 删除 URL 中常见的登录和会话参数
 - 生成 Excel 可直接打开的 UTF-8 CSV 学习清单
 - 输出收录数量、编号范围和缺号检查结果
+- 通过 JSON 自定义分类、难度、优先级和标题关键词
 - 提供自动测试，验证去重和脱敏行为
 
 ## 安全边界
 
-原始 HAR 可能包含 Cookie、请求头、账号标识和临时令牌。请始终在本地处理，不要把 HAR 提交到 GitHub。
+原始 HAR 可能包含 Cookie、请求头、账号标识和临时令牌，因此仅适合作为本地输入，不应提交到 GitHub。
 
 本仓库的 `.gitignore` 默认排除：
 
@@ -34,8 +35,11 @@
 ```powershell
 python src/article_learning_tracker.py `
   --input "C:\path\to\first.har" "C:\path\to\second.har" `
+  --rules "config\classification.example.json" `
   --output "output\articles.csv"
 ```
+
+`--rules` 是可选参数。不提供时，文章会被标记为“未分类”；提供后，程序按照配置中的规则顺序匹配标题关键词。示例文件可复制并修改为读书、英语、考公、科研、财经或其他主题。详见 [`docs/classification.md`](docs/classification.md)。
 
 生成的 CSV 包含以下字段：
 
@@ -54,6 +58,19 @@ python -m unittest discover -s tests -v
 ```
 
 测试使用程序临时生成的虚构数据，不包含真实 HAR 或真实文章信息。
+
+### 验证其他人能否使用
+
+在另一台电脑或一个新的空目录中执行：
+
+```powershell
+git clone https://github.com/LoriChenyt/article-learning-tracker.git
+Set-Location article-learning-tracker
+python -m unittest discover -s tests -v
+python src/article_learning_tracker.py --help
+```
+
+如果测试全部显示 `ok`，并且帮助命令列出 `--input`、`--output` 和 `--rules`，说明项目可以在不依赖原作者本地私人文件的情况下运行。真正生成 CSV 时，仍需提供使用者合法取得的 HAR。
 
 ## 项目流程
 
@@ -75,9 +92,9 @@ URL 会话参数清理
 
 ## 隐私与内容说明
 
-- 请只处理你有权访问的数据。
-- 不要公开原始 HAR、Cookie、请求头或会话参数。
-- 建议公开代码和虚构示例，把真实文章目录与个人笔记保留在本地。
+- 数据处理范围应限于使用者有权访问的内容。
+- 原始 HAR、Cookie、请求头和会话参数不属于公开内容。
+- 适合公开的内容包括代码和虚构示例；真实文章目录与个人笔记适合保留在本地。
 - 文章内容和标题的相关权利归原作者或发布者所有。本项目只提供本地数据处理方法。
 
 ## License
