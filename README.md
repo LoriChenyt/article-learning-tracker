@@ -60,6 +60,8 @@ python -m unittest discover -s tests -v
 
 测试使用程序临时生成的虚构数据，不包含真实 HAR 或真实文章信息。
 
+下载、目录、命令行、HAR 完整性、Base64、自动滚动、乱码和分类配置等问题，见 [`docs/troubleshooting.md`](docs/troubleshooting.md)。
+
 ### 验证其他人能否使用
 
 在另一台电脑或一个新的空目录中执行：
