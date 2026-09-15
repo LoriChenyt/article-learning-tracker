@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import base64
 import json
 import sys
 import tempfile
@@ -59,6 +60,69 @@ class ArticleLearningTrackerTests(unittest.TestCase):
             path = Path(directory) / "fixture.json"
             path.write_text(json.dumps(har), encoding="utf-8")
             self.assertEqual(MODULE.extract_from_har(path), [])
+
+    def test_base64_json_response_is_extracted_and_sanitized(self) -> None:
+        payload = {
+            "article_list": [
+                {
+                    "pos_num": 7,
+                    "title": "虚构的 Base64 示例文章",
+                    "create_time": "1704067200",
+                    "url": "https://example.com/article?id=7&key=fake-secret",
+                    "msgid": "base64-demo",
+                }
+            ]
+        }
+        encoded = base64.b64encode(
+            json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        ).decode("ascii")
+        har = {
+            "log": {
+                "entries": [
+                    {
+                        "response": {
+                            "content": {
+                                "text": encoded,
+                                "encoding": "base64",
+                                "mimeType": "application/json",
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fixture.json"
+            path.write_text(json.dumps(har), encoding="utf-8")
+            articles = MODULE.extract_from_har(path)
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0].source_order, 7)
+        self.assertEqual(articles[0].url, "https://example.com/article?id=7")
+
+    def test_invalid_base64_response_is_ignored(self) -> None:
+        entry = {
+            "response": {
+                "content": {
+                    "text": "not-valid-base64!",
+                    "encoding": "base64",
+                    "mimeType": "application/json",
+                }
+            }
+        }
+        self.assertIsNone(MODULE.response_json(entry))
+
+    def test_base64_binary_response_is_ignored(self) -> None:
+        entry = {
+            "response": {
+                "content": {
+                    "text": base64.b64encode(b"image-data").decode("ascii"),
+                    "encoding": "base64",
+                    "mimeType": "image/png",
+                }
+            }
+        }
+        self.assertIsNone(MODULE.response_json(entry))
 
     def test_user_defined_rules_control_classification(self) -> None:
         payload = {

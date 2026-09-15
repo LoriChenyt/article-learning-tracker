@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import csv
 import hashlib
 import json
@@ -163,8 +165,13 @@ def response_json(entry: dict[str, Any]) -> Any | None:
     if not isinstance(text, str) or not text.strip():
         return None
     if content.get("encoding") == "base64":
-        # Authentication-bearing binary responses are intentionally ignored.
-        return None
+        mime_type = str(content.get("mimeType", "")).lower()
+        if "json" not in mime_type and not mime_type.startswith("text/"):
+            return None
+        try:
+            text = base64.b64decode(text, validate=True).decode("utf-8-sig")
+        except (binascii.Error, UnicodeDecodeError):
+            return None
     try:
         return json.loads(text)
     except json.JSONDecodeError:
